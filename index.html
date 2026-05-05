@@ -210,6 +210,7 @@
     </main>
 
     <script>
+        (async()=>{
       const chatEl = document.getElementById("chat");
       const promptEl = document.getElementById("prompt");
       const sendBtn = document.getElementById("send");
@@ -369,6 +370,7 @@
       });
 
       await fetchModelInfo();
+      })();
     </script>
   </body>
 </html>
