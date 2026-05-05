@@ -156,6 +156,23 @@
         font-size: 0.85rem;
         color: var(--muted);
       }
+
+      .model-bar {
+        padding: 6px 14px 10px;
+        font-size: 0.8rem;
+        color: var(--muted);
+        background: linear-gradient(180deg, #111a34, #0f172b);
+        border-bottom: 1px solid #1e2e55;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .model-bar span {
+        font-family: "SF Mono", "Fira Code", Consolas, monospace;
+        color: var(--accent);
+        font-size: 0.78rem;
+      }
     </style>
   </head>
   <body>
@@ -173,6 +190,8 @@
         </div>
         <button id="clearChat">Clear Chat</button>
       </section>
+
+      <div class="model-bar">Active model: <span id="modelName">—</span></div>
 
       <section id="chat" class="chat"></section>
 
@@ -315,7 +334,24 @@
         state.endpoint = endpointEl.value.trim();
         localStorage.setItem("workerEndpoint", state.endpoint);
         setStatus("Endpoint saved locally.", "ok");
+        fetchModelInfo();
       });
+
+      async function fetchModelInfo() {
+        const endpoint = endpointEl.value.trim();
+        if (!endpoint) return;
+        try {
+          const res = await fetch(endpoint, { method: "GET" });
+          if (!res.ok) return;
+          const data = await res.json();
+          const name = data?.model;
+          if (typeof name === "string") {
+            document.getElementById("modelName").textContent = name;
+          }
+        } catch {
+          // silently ignore — endpoint may not be reachable yet
+        }
+      }
 
       clearChatBtn.addEventListener("click", () => {
         state.messages = [];
@@ -331,6 +367,8 @@
           sendMessage();
         }
       });
+
+      await fetchModelInfo();
     </script>
   </body>
 </html>
