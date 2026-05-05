@@ -1,4 +1,4 @@
-# workers-ai-proxy
+# workers-ai
 
 OpenAI-compatible chat completions proxy built on Cloudflare Workers AI. Auto-selects the best available free model, falls back gracefully on rate limits.
 
