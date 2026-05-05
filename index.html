@@ -165,6 +165,8 @@
           <input
             id="endpoint"
             type="url"
+            title="Worker endpoint URL"
+            placeholder="https://your-worker.workers.dev"
             value="https://gemma-7b-it-lora.language-models.workers.dev/"
           />
           <button id="saveEndpoint">Save</button>
@@ -210,28 +212,43 @@
         statusEl.className = `status ${kind}`.trim();
       }
 
-      function addBubble(role, content) {
+      function addBubble(role, content = "") {
         const div = document.createElement("div");
         div.className = `msg ${role}`;
         div.textContent = content;
         chatEl.appendChild(div);
         chatEl.scrollTop = chatEl.scrollHeight;
+        return div;
       }
 
-      function getAssistantText(payload) {
-        if (!payload || !Array.isArray(payload.choices) || !payload.choices.length) {
-          return "(No response choices returned)";
-        }
+      function processSSELine(line, onToken) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) return false;
+        const data = trimmed.slice(5).trim();
+        if (data === "[DONE]") return true;
+        let parsed;
+        try { parsed = JSON.parse(data); } catch { return false; }
+        const token = parsed.choices?.[0]?.delta?.content;
+        if (typeof token === "string" && token) onToken(token);
+        return false;
+      }
 
-        const msg = payload.choices[0]?.message?.content;
-        if (typeof msg === "string") return msg;
-        if (Array.isArray(msg)) {
-          return msg
-            .map((part) => (typeof part === "string" ? part : part?.text || ""))
-            .join("");
+      async function readStream(body, onToken) {
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop();
+          let finished = false;
+          for (const line of lines) {
+            if (processSSELine(line, onToken)) { finished = true; break; }
+          }
+          if (finished) break;
         }
-
-        return "(Assistant response was not text)";
       }
 
       async function sendMessage() {
@@ -253,7 +270,10 @@
 
         state.inFlight = true;
         sendBtn.disabled = true;
-        setStatus("Waiting for response...", "");
+        setStatus("Streaming...", "");
+
+        const bubble = addBubble("assistant");
+        let fullText = "";
 
         try {
           const res = await fetch(endpoint, {
@@ -262,23 +282,27 @@
             body: JSON.stringify({
               messages: state.messages,
               temperature: 0.7,
+              stream: true,
             }),
           });
 
-          const data = await res.json().catch(() => ({}));
-
           if (!res.ok) {
-            const detail = data?.error || data?.message || `HTTP ${res.status}`;
+            const errData = await res.json().catch(() => ({}));
+            const detail = errData?.error || errData?.message || `HTTP ${res.status}`;
             throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
           }
 
-          const assistantText = getAssistantText(data);
-          state.messages.push({ role: "assistant", content: assistantText });
-          addBubble("assistant", assistantText);
+            await readStream(res.body, (token) => {
+            fullText += token;
+            bubble.textContent = fullText;
+            chatEl.scrollTop = chatEl.scrollHeight;
+          });
+
+          state.messages.push({ role: "assistant", content: fullText });
           setStatus("Response received.", "ok");
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          addBubble("assistant", `Error: ${message}`);
+          bubble.textContent = `Error: ${message}`;
           setStatus(`Request failed: ${message}`, "err");
         } finally {
           state.inFlight = false;
