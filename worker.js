@@ -319,6 +319,17 @@ async function buildTieredModels(env, limits) {
   }
 }
 
+const stringify = x =>{
+  if(isString(x)){
+    return String(x);
+  }
+  try{
+    return String(JSON.stringify(x));
+  }catch{
+    return String(x);
+  }
+};
+
 export default {
   async fetch(request, env) {
     env.CF_ACCOUNT_ID ??= '';
@@ -357,26 +368,23 @@ export default {
       });
     }
 
-    if (request.method !== "POST") {
-      return json(
-        { error: "Use POST with an OpenAI-compatible chat/completions body." },
-        { status: 405 },
-      );
-    }
-
+    let text;
     let body;
     try {
-      body = await request.json();
+      text = (await request.text()).trim();
+      body = JSON.parse(text);
     } catch {
-      return json({ error: "Invalid JSON body." }, { status: 400 });
+      if(!text){
+        body = Object.fromEntries(new URL(request.url).searchParams.entries());
+      }
     }
 
-    const messages = body?.messages;
-    if (!isArray(messages) || messages.length === 0) {
-      return json(
-        { error: "Request body must include a non-empty messages array." },
-        { status: 400 },
-      );
+    let messages = body?.messages;
+    if(body && !messages?.length){
+      messages = Object.entries(Object(body)).map(stringify);
+    }
+    if(!messages?.length){
+      messages = stringify(text).split('\n');
     }
 
     const stream = Boolean(body?.stream);
