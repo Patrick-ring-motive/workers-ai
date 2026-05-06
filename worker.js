@@ -376,6 +376,7 @@ export default {
     } catch {
       if(!text){
         body = Object.fromEntries(new URL(request.url).searchParams.entries());
+        body = {...Object.fromEntries(request.headers.entries(),...body);
       }
     }
 
