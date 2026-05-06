@@ -4,7 +4,6 @@ globalThis.env ??= {};
 
 let resolvedModel = null;
 let modelTiers = null;
-let modelLimits = null;
 
 const stringify = x =>{
   if(isString(x)){
@@ -16,6 +15,24 @@ const stringify = x =>{
     return String(x);
   }
 };
+
+const parse = x =>{
+  try{
+    return Object(JSON.parse(x));
+  }catch{
+    Object(x);
+  }
+};
+
+const fetchResponse = async(...args)=>{
+  try{
+    return await fetch(...args);
+  }catch(e){
+    return new Response(String(e),{status:500,statusText:String(e)});
+  }
+};
+
+
 
 // Tracks per-model rate limit windows: { modelName: { count, windowStart } }
 const rateLimitTracker = {};
@@ -118,109 +135,6 @@ function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
   );
 }
 
-function isBetaModel(model) {
-  if (model.beta === true) return true;
-  if (isArray(model.properties)) {
-    return model.properties.some((p) => p.property_id === "beta" && p.value === "true");
-  }
-  return false;
-}
-
-function isDeprecated(model) {
-  if (model.deprecated === true) return true;
-  if (isArray(model.properties)) {
-    return model.properties.some((p) => (p.property_id === "deprecated" && p.value === "true") || (p.property_id === "planned_deprecation_date" && new Date(p.value).getTime() < new Date().getTime()));
-  }
-  return false;
-}
-
-function paramScore(name) {
-  const SUFFIXES = { t: 1000, b: 1, m: 0.001, k: 0.000001 };
-  const matches = [...name.matchAll(/(\d+(?:\.\d+)?)\s*x?\s*(\d+(?:\.\d+)?)?\s*([tbmk])\b/gi)];
-  if (!matches.length) return 0;
-  return Math.max(...matches.map((m) => {
-    const num = Number.parseFloat(m[1]);
-    const mult = m[2] ? Number.parseFloat(m[2]) : 1;
-    const scale = SUFFIXES[m[3].toLowerCase()] ?? 1;
-    return num * mult * scale;
-  }));
-}
-
-function getProps(model) {
-  const props = {};
-  if (isArray(model.properties)) {
-    for (const p of model.properties) props[p.property_id] = p.value;
-  }
-  return props;
-}
-
-const SPECIALIZED_KEYWORDS = ["sql", "code", "coder", "math", "embed", "rerank"];
-
-function scoreModel(model) {
-  const props = getProps(model);
-  let score = 0;
-
-  // Parameter count (0–30): larger models are generally more capable
-  const params = paramScore(model.name);
-  score += Math.min(params * 4, 30);
-
-  // Context window (0–25): 1 pt per 1k tokens, capped at 25
-  const ctx = Number.parseInt(props.context_window || "0", 10);
-  score += Math.min(ctx / 1000, 25);
-
-  // Function calling support (+10) – strong capability signal
-  if (props.function_calling === "true") score += 10;
-
-  // LoRA adapter support (+5) – adds flexibility
-  if (props.lora === "true") score += 5;
-
-  // Instruct / chat fine-tune bonus (+5)
-  const lower = model.name.toLowerCase();
-  if (/instruct|chat/.test(lower)) score += 5;
-
-  // Cloudflare-native source gets a small integration bonus (+3)
-  if (model.source === 1) score += 3;
-
-  // Penalise specialised models that aren't great for general chat (–15)
-  const lowerDesc = (model.description || "").toLowerCase();
-  if (SPECIALIZED_KEYWORDS.some((kw) => lower.includes(kw) || lowerDesc.includes(kw))) {
-    score -= 15;
-  }
-
-  // Slight recency bonus: newer models get up to +3
-  const created = new Date(model.created_at).getTime();
-  const ageMonths = (Date.now() - created) / (1000 * 60 * 60 * 24 * 30);
-  score += Math.max(3 - ageMonths * 0.1, 0);
-
-  return score;
-}
-
-function rankModels(candidates) {
-  return candidates
-    .map((m) => ({ ...m, _score: scoreModel(m) }))
-    .sort((a, b) => b._score - a._score);
-}
-
-function getModelRateLimit(modelName, taskName, limits) {
-  if (limits.models[modelName]) return limits.models[modelName].limit;
-  if (taskName && limits.tasks[taskName]) return limits.tasks[taskName];
-  return limits.tasks["Text Generation"] ?? 300;
-}
-
-function buildModelTiers(rankedModels, limits) {
-  const tierMap = new Map(); // limit -> [models]
-  for (const m of rankedModels) {
-    const taskName = m.task?.name || "Text Generation";
-    const limit = getModelRateLimit(m.name, taskName, limits);
-    if (!tierMap.has(limit)) tierMap.set(limit, []);
-    tierMap.get(limit).push({ ...m, _rateLimit: limit });
-  }
-  // Sort tiers: lowest limit first, models within each tier already ranked by score
-  return [...tierMap.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([limit, models]) => ({ limit, models }));
-}
-
 function isRateLimited(modelName, limit) {
   const now = Date.now();
   const entry = rateLimitTracker[modelName];
@@ -261,92 +175,26 @@ function pickAvailableModel(tiers) {
   return best?.name ?? null;
 }
 
-async function scrapeModelLimits() {
-  const response = await fetch('https://developers.cloudflare.com/workers-ai/platform/limits/index.md');
-  const mdContent = await response.text();
-  
-  const result = {
-    tasks: {},   // Default limits for the category
-    models: {}   // Specific overrides
-  };
-
-  const lines = mdContent.split('\n');
-  let currentTask = null;
-
-  for (const line of lines) {
-    // 1. Identify the Task (### [Task Name])
-    const taskMatch = line.match(/^###\s+\[(.*?)\]/);
-    if (taskMatch) {
-      currentTask = taskMatch[1];
-      continue;
-    }
-
-    // 2. Identify a Model Override (* [@model] is X...)
-    const modelMatch = line.match(/\*\s+\[(@[\w\-\.\/]+)\]\(.*?\)\s+is\s+(\d+)/);
-    if (modelMatch) {
-      const modelName = modelMatch[1];
-      const limit = parseInt(modelMatch[2], 10);
-      result.models[modelName] = {
-        limit,
-        task: currentTask
-      };
-      continue;
-    }
-
-    // 3. Identify Task Default (* X requests per minute)
-    // Only captures if it's a bullet point and NOT a model override
-    const defaultMatch = line.match(/^\*\s+(\d+)\s+requests\s+per\s+minute/);
-    if (defaultMatch && currentTask) {
-      result.tasks[currentTask] = parseInt(defaultMatch[1], 10);
-    }
-  }
-
-  return result;
-}
-
-async function buildTieredModels(env, limits) {
-  if (!env.CF_ACCOUNT_ID || !env.CF_API_TOKEN) return null;
-  try {
-    const url =
-      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.CF_ACCOUNT_ID)}` +
-      `/ai/models/search?task=Text+Generation&per_page=100`;
-    const res = await fetch(url, {
-      headers: { authorization: `Bearer ${env.CF_API_TOKEN}` },
-    });
-    if (!res.ok) return null;
-    const { result } = await res.json();
-    if (!isArray(result) || result.length === 0) return null;
-    const candidates = result.filter((m) => isBetaModel(m) && !isDeprecated(m));
-    const ranked = rankModels(candidates);
-    const tiers = buildModelTiers(ranked, limits);
-    console.log("Model tiers:", tiers.map((t) =>
-      `[${t.limit} rpm: ${t.models.map((m) => `${m.name}(${m._score.toFixed(1)})`).join(", ")}]`
-    ).join(" → "));
-    return tiers;
-  } catch(e) {
-    console.log(e);
-    return null;
+async function getModelTiers(){
+  try{
+    const res = await fetchResponse('https://text-generation-models.language-models-aggregate.workers.dev/');
+    const text = await res.text();
+    return parse(text);
+  }catch{
+    return [];
   }
 }
-
-
 
 export default {
   async fetch(request, env) {
-    env.CF_ACCOUNT_ID ??= '';
-    env.CF_API_TOKEN ??= '';
+
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
     // Lazy-init
 
-    modelLimits ??= scrapeModelLimits();
-    if(modelLimits instanceof Promise){
-      modelLimits = await modelLimits;
-    }
-
-    modelTiers ??= buildTieredModels(env, modelLimits);
+    modelTiers ??= getModelTiers();
     if(modelTiers instanceof Promise){
       modelTiers = await modelTiers;
     }
