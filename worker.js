@@ -1,5 +1,6 @@
-let test = `ok`
 
+
+let test = `ok`;
 const DEFAULT_MODEL = "@cf/google/gemma-7b-it-lora";
 globalThis.env ??= {};
 
@@ -21,7 +22,7 @@ const parse = x =>{
   try{
     return Object(JSON.parse(x));
   }catch{
-    Object(x);
+    return Object(x);
   }
 };
 
@@ -188,6 +189,16 @@ async function getModelTiers(){
   }
 }
 
+const longestArray = (...args)=>{
+  let longest = [];
+  for(const arg of args){
+    if(arg.length < longest.length){
+      longest = arg;
+    }
+  }
+  return longest;
+};
+
 async function runAI(AI,model, aiInput,summarizer){
   try{
     return await AI.run(model, aiInput);
@@ -212,13 +223,20 @@ async function runAI(AI,model, aiInput,summarizer){
       const overPercent = over / tokens;
       const cut = Math.floor(overPercent * text.length);
       text = text.slice(cut);
+      if(summarizer === 'thanos'){
+        text = text.slice(Math.round(text.length/2));
+      }
     }
 
-    const messages = text.split('\n');
+    const messages = longestArray(text.split('\n'),[...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)].map(x=>x.segment.trim()).filter(Boolean));
     const oldMessages = aiInput.messages.slice(aiInput.messages.length - messages.length);
     aiInput.messages = messages.map((x,i)=>({role:oldMessages[i]?.role||'user',content:x}));
-    aiInput.messages.push({role:String(oldMessages[0]?.role),content:String([...oldMessages].map(x=>x.content).join('\n').split('\n').pop())});
-    return runAI(AI,model, aiInput);
+    aiInput.messages.push({role:String(oldMessages[oldMessages.length - 1]?.role),content:String([...oldMessages].map(x=>x.content).join('\n').split('\n').pop())});
+    if(summarizer){
+      return runAI(AI,model, aiInput);
+    }else{
+      return runAI(AI,model,aiInput,'thanos');
+    }
   }
 }
 
@@ -235,7 +253,7 @@ export default {
     if(modelTiers instanceof Promise){
       modelTiers = await modelTiers;
     }
-    const {summarizer} = modelTiers;
+    const summarizer= modelTiers?.summarizer;
 
     // Resolve current best available model from tiers
     resolvedModel = (modelTiers && pickAvailableModel(modelTiers)) || DEFAULT_MODEL;
