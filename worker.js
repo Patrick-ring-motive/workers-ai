@@ -382,10 +382,10 @@ export default {
 
     let messages = body?.messages;
     if(body && !messages?.length){
-      messages = Object.entries(Object(body)).map(stringify);
+      messages = Object.entries(Object(body)).map(([key,value])=>{role:String(key),content:stringify(value)});
     }
     if(!messages?.length){
-      messages = stringify(text).split('\n');
+      messages = stringify(text).split('\n').map(x=>{role:"user",content:x});
     }
 
     const stream = Boolean(body?.stream);
