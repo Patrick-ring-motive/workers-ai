@@ -377,16 +377,16 @@ export default {
     } catch {
       if(!text){
         body = Object.fromEntries(new URL(request.url).searchParams.entries());
-        body = {...Object.fromEntries(request.headers.entries(),...body);
+        body = {...Object.fromEntries(request.headers.entries(),...body)};
       }
     }
 
     let messages = body?.messages;
     if(body && !messages?.length){
-      messages = Object.entries(Object(body)).map(([key,value])=>{role:String(key),content:stringify(value)});
+      messages = Object.entries(Object(body)).map(([key,value])=>({role:String(key),content:stringify(value)}));
     }
     if(!messages?.length){
-      messages = stringify(text).split('\n').map(x=>{role:"user",content:x});
+      messages = stringify(text).split('\n').map(x=>({role:"user",content:x}));
     }
 
     const stream = Boolean(body?.stream);
