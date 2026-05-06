@@ -6,6 +6,17 @@ let resolvedModel = null;
 let modelTiers = null;
 let modelLimits = null;
 
+const stringify = x =>{
+  if(isString(x)){
+    return String(x);
+  }
+  try{
+    return String(JSON.stringify(x));
+  }catch{
+    return String(x);
+  }
+};
+
 // Tracks per-model rate limit windows: { modelName: { count, windowStart } }
 const rateLimitTracker = {};
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -79,29 +90,28 @@ function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-          const data = trimmed.slice(5).trim();
+          const data = trimmed.replace(/^data:/i,'').trim();
 
           if (data === "[DONE]") {
             const finishChunk = {
               id, object: "chat.completion.chunk", created, model,
               choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
             };
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(finishChunk)}\n\ndata: [DONE]\n\n`));
+            controller.enqueue(encoder.encode(`data: ${stringify(finishChunk)}\n\ndata: [DONE]\n\n`));
             return;
           }
 
           let parsed;
-          try { parsed = JSON.parse(data); } catch { continue; }
+          try { parsed = JSON.parse(data); } catch { }
 
-          const token = parsed.response ?? parsed.token ?? parsed.text ?? "";
+          const token = parsed?.response ?? parsed?.token ?? parsed?.text ?? data;
           if (!token) continue;
 
           const openaiChunk = {
             id, object: "chat.completion.chunk", created, model,
             choices: [{ index: 0, delta: { content: token }, finish_reason: null }],
           };
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(openaiChunk)}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${stringify(openaiChunk)}\n\n`));
         }
       },
     }),
@@ -319,16 +329,7 @@ async function buildTieredModels(env, limits) {
   }
 }
 
-const stringify = x =>{
-  if(isString(x)){
-    return String(x);
-  }
-  try{
-    return String(JSON.stringify(x));
-  }catch{
-    return String(x);
-  }
-};
+
 
 export default {
   async fetch(request, env) {
@@ -455,7 +456,7 @@ export default {
         });
       } catch (error) {
         lastError = error;
-        const msg = String(error?.message || "").toLowerCase();
+        const msg = String(error?.message || error).toLowerCase();
         if (msg.includes("rate limit") || msg.includes("429") || msg.includes("too many")) {
           markRateLimited(model);
           console.log(`Rate limited on ${model}, trying next…`);
