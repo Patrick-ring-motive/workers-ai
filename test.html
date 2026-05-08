@@ -1,3 +1,14 @@
+<style>
+    :root {
+      --min-vh: min(100vh, min(100dvh, 100svh));
+    }
+
+    body {
+      background-color: #f3f4f6;
+      font-family: sans-serif;
+      max-height: var(--min-vh) !important;
+    }
+</style>
 <flowise-fullchatbot></flowise-fullchatbot>
 <script type="module">
     import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
