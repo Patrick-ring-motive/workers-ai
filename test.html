@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
     :root {
       --min-vh: min(100vh, min(100dvh, 100svh));
     }
@@ -13,19 +14,25 @@
       font-family: sans-serif;
       max-height: var(--min-vh) !important;
     }
-  span:has(a){
-    display:none;
-  }
-</style>
-  </head>
-    <body>
-<flowise-fullchatbot></flowise-fullchatbot>
-<script type="module">
+
+    span:has(a) {
+      display: none;
+    }
+
+  </style>
+</head>
+
+<body>
+  <flowise-fullchatbot></flowise-fullchatbot>
+  <script type="module">
     import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
     await Chatbot.initFull({
-        chatflowid: "02593f67-fd35-4fde-a2f4-ffd34c530154",
-        apiHost: "https://cloud.flowiseai.com",
+      chatflowid: "02593f67-fd35-4fde-a2f4-ffd34c530154",
+      apiHost: "https://cloud.flowiseai.com",
     });
-  document.querySelector('flowise-fullchatbot').shadowRoot.appendChild(document.querySelector('style').cloneNode(true));
-</script>
-    </body></html>
+    document.querySelector('flowise-fullchatbot').shadowRoot.appendChild(document.querySelector('style').cloneNode(true));
+
+  </script>
+</body>
+
+</html>
