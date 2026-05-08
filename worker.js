@@ -192,7 +192,7 @@ async function getModelTiers(){
 const longestArray = (...args)=>{
   let longest = [];
   for(const arg of args){
-    if(arg.length < longest.length){
+    if(arg.length > longest.length){
       longest = arg;
     }
   }
@@ -200,6 +200,9 @@ const longestArray = (...args)=>{
 };
 
 async function runAI(AI,model, aiInput,summarizer){
+  if(aiInput.messages[0]?.role !== 'system'){
+    aiInput.messages.unshift({role:'system',content:`Current DateTime: ${new Date().toISOString()}`});
+  }
   try{
     return await AI.run(model, aiInput);
   }catch(e){
