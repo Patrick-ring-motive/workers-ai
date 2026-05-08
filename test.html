@@ -13,15 +13,19 @@
       font-family: sans-serif;
       max-height: var(--min-vh) !important;
     }
+  span:has(a){
+    display:none;
+  }
 </style>
   </head>
     <body>
 <flowise-fullchatbot></flowise-fullchatbot>
 <script type="module">
     import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
-    Chatbot.initFull({
+    await Chatbot.initFull({
         chatflowid: "02593f67-fd35-4fde-a2f4-ffd34c530154",
         apiHost: "https://cloud.flowiseai.com",
-    })
+    });
+  document.querySelector('flowise-fullchatbot').shadowRoot.appendChild(document.querySelector('style').cloneNode(true));
 </script>
     </body></html>
