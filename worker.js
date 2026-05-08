@@ -1,5 +1,3 @@
-
-
 let test = `ok`;
 const DEFAULT_MODEL = "@cf/google/gemma-7b-it-lora";
 globalThis.env ??= {};
@@ -7,34 +5,35 @@ globalThis.env ??= {};
 let resolvedModel = null;
 let modelTiers = null;
 
-const stringify = x =>{
-  if(isString(x)){
+const stringify = x => {
+  if (isString(x)) {
     return String(x);
   }
-  try{
+  try {
     return String(JSON.stringify(x));
-  }catch{
+  } catch {
     return String(x);
   }
 };
 
-const parse = x =>{
-  try{
+const parse = x => {
+  try {
     return Object(JSON.parse(x));
-  }catch{
+  } catch {
     return Object(x);
   }
 };
 
-const fetchResponse = async(...args)=>{
-  try{
+const fetchResponse = async (...args) => {
+  try {
     return await fetch(...args);
-  }catch(e){
-    return new Response(String(e),{status:500,statusText:String(e)});
+  } catch (e) {
+    return new Response(String(e), {
+      status: 500,
+      statusText: String(e)
+    });
   }
 };
-
-
 
 // Tracks per-model rate limit windows: { modelName: { count, windowStart } }
 const rateLimitTracker = {};
@@ -76,26 +75,32 @@ function extractAssistantText(result) {
   return JSON.stringify(result);
 }
 
-function toOpenAIChatResponse({ id, model, content }) {
+function toOpenAIChatResponse({
+  id,
+  model,
+  content
+}) {
   return {
     id,
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
     model,
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: "assistant",
-          content,
-        },
-        finish_reason: "stop",
+    choices: [{
+      index: 0,
+      message: {
+        role: "assistant",
+        content,
       },
-    ],
+      finish_reason: "stop",
+    }, ],
   };
 }
 
-function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
+function cfStreamToOpenAIStream(cfStream, {
+  id,
+  model,
+  created
+}) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -103,32 +108,53 @@ function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
   return cfStream.pipeThrough(
     new TransformStream({
       transform(chunk, controller) {
-        buffer += decoder.decode(chunk, { stream: true });
+        buffer += decoder.decode(chunk, {
+          stream: true
+        });
         const lines = buffer.split("\n");
         buffer = lines.pop();
 
         for (const line of lines) {
           const trimmed = line.trim();
-          const data = trimmed.replace(/^data:/i,'').trim();
+          const data = trimmed.replace(/^data:/i, '').trim();
 
           if (data === "[DONE]") {
             const finishChunk = {
-              id, object: "chat.completion.chunk", created, model,
-              choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+              id,
+              object: "chat.completion.chunk",
+              created,
+              model,
+              choices: [{
+                index: 0,
+                delta: {},
+                finish_reason: "stop"
+              }],
             };
             controller.enqueue(encoder.encode(`data: ${stringify(finishChunk)}\n\ndata: [DONE]\n\n`));
             return;
           }
 
           let parsed;
-          try { parsed = JSON.parse(data); } catch { }
+          try {
+            parsed = JSON.parse(data);
+          } catch {}
 
           const token = parsed?.response ?? parsed?.token ?? parsed?.text ?? data;
           if (!token) continue;
 
           const openaiChunk = {
-            id, object: "chat.completion.chunk", created, model,
-            choices: [{ index: 0, delta: { role:"assistant",content: token }, finish_reason: null }],
+            id,
+            object: "chat.completion.chunk",
+            created,
+            model,
+            choices: [{
+              index: 0,
+              delta: {
+                role: "assistant",
+                content: token
+              },
+              finish_reason: null
+            }],
           };
           controller.enqueue(encoder.encode(`data: ${stringify(openaiChunk)}\n\n`));
         }
@@ -148,7 +174,10 @@ function trackRequest(modelName) {
   const now = Date.now();
   const entry = rateLimitTracker[modelName];
   if (!entry || now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitTracker[modelName] = { count: 1, windowStart: now };
+    rateLimitTracker[modelName] = {
+      count: 1,
+      windowStart: now
+    };
   } else {
     entry.count++;
   }
@@ -158,7 +187,10 @@ function markRateLimited(modelName) {
   const now = Date.now();
   const entry = rateLimitTracker[modelName];
   if (!entry || now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitTracker[modelName] = { count: Infinity, windowStart: now };
+    rateLimitTracker[modelName] = {
+      count: Infinity,
+      windowStart: now
+    };
   } else {
     entry.count = Infinity;
   }
@@ -177,68 +209,81 @@ function pickAvailableModel(tiers) {
   return best?.name ?? null;
 }
 
-async function getModelTiers(){
-  try{
+async function getModelTiers() {
+  try {
     const res = await fetchResponse('https://text-generation-models.language-models-aggregate.workers.dev/');
     const text = await res.text();
     const obj = parse(text);
     obj.summarizer = res.headers.get('summarizer');
     return obj;
-  }catch{
+  } catch {
     return [];
   }
 }
 
-const longestArray = (...args)=>{
+const longestArray = (...args) => {
   let longest = [];
-  for(const arg of args){
-    if(arg.length > longest.length){
+  for (const arg of args) {
+    if (arg.length > longest.length) {
       longest = arg;
     }
   }
   return longest;
 };
 
-async function runAI(AI,model, aiInput,summarizer){
-  if(aiInput.messages[0]?.role !== 'system'){
-    aiInput.messages.unshift({role:'system',content:`Current DateTime: ${new Date().toISOString()}`});
+async function runAI(AI, model, aiInput, summarizer) {
+  if (aiInput.messages[0]?.role !== 'system') {
+    aiInput.messages.unshift({
+      role: 'system',
+      content: `Current DateTime: ${new Date().toISOString()}`
+    });
   }
-  try{
+  try {
     return await AI.run(model, aiInput);
-  }catch(e){
-    if(!e.message.includes('5021')){
+  } catch (e) {
+    if (!e.message.includes('5021')) {
       throw e;
     }
-    const tokens = (+e.message.match(/tokens\s*\((\d+)\)/)[1]||0);
-    const limit = Math.floor((+e.message.match(/limit\s*\((\d+)\)/)[1]||0) * 0.8);
-    let text = aiInput.messages.map(x=>x.content).join('\n');
-    try{
-      if(!summarizer){
+    const tokens = (+e.message.match(/tokens\s*\((\d+)\)/)[1] || 0);
+    const limit = Math.floor((+e.message.match(/limit\s*\((\d+)\)/)[1] || 0) * 0.8);
+    let text = aiInput.messages.map(x => x.content).join('\n');
+    try {
+      if (!summarizer) {
         throw summarizer;
       }
-      const {summary} = await AI.run(summarizer, {
+      const {
+        summary
+      } = await AI.run(summarizer, {
         input_text: text,
         max_length: limit
       });
       text = summary;
-    }catch{
+    } catch {
       const over = tokens - limit;
       const overPercent = over / tokens;
       const cut = Math.floor(overPercent * text.length);
       text = text.slice(cut);
-      if(summarizer === 'thanos'){
-        text = text.slice(Math.round(text.length/2));
+      if (summarizer === 'thanos') {
+        text = text.slice(Math.round(text.length / 2));
       }
     }
 
-    const messages = longestArray(text.split('\n'),[...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)].map(x=>x.segment.trim()).filter(Boolean));
+    const messages = longestArray(text.split('\n'), [...new Intl.Segmenter("en", {
+      granularity: "sentence"
+    }).segment(text)].map(x => x.segment.trim()).filter(Boolean));
     const oldMessages = aiInput.messages.slice(aiInput.messages.length - messages.length);
-    aiInput.messages = messages.map((x,i)=>({role:oldMessages[i]?.role||'user',content:x}));
-    aiInput.messages.push({role:String(oldMessages[oldMessages.length - 1]?.role),content:String([...oldMessages].map(x=>x.content).join('\n').split('\n').pop())});
-    if(summarizer){
-      return runAI(AI,model, aiInput);
-    }else{
-      return runAI(AI,model,aiInput,'thanos');
+    aiInput.messages = messages.map((x, i) => ({
+      role: oldMessages[i]?.role || 'user',
+      content: x
+    }));
+    aiInput.messages.push({
+      role: String(oldMessages[oldMessages.length - 1]?.role),
+      content: String([...oldMessages].map(x => x.content).join('\n').split('\n').pop())
+    });
+    if (summarizer) {
+      return runAI(AI, model, aiInput);
+    } else {
+      return runAI(AI, model, aiInput, 'thanos');
     }
   }
 }
@@ -247,16 +292,18 @@ export default {
   async fetch(request, env) {
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: CORS_HEADERS });
+      return new Response(null, {
+        headers: CORS_HEADERS
+      });
     }
 
     // Lazy-init
 
     modelTiers ??= getModelTiers();
-    if(modelTiers instanceof Promise){
+    if (modelTiers instanceof Promise) {
       modelTiers = await modelTiers;
     }
-    const summarizer= modelTiers?.summarizer;
+    const summarizer = modelTiers?.summarizer;
 
     // Resolve current best available model from tiers
     resolvedModel = (modelTiers && pickAvailableModel(modelTiers)) || DEFAULT_MODEL;
@@ -282,29 +329,43 @@ export default {
       text = (await request.text()).trim();
       body = JSON.parse(text);
     } catch {
-      if(!text){
+      if (!text) {
         body = Object.fromEntries(new URL(request.url).searchParams.entries());
-        body = {...Object.fromEntries(request.headers.entries()),...body};
+        body = {
+          ...Object.fromEntries(request.headers.entries()),
+          ...body
+        };
       }
     }
 
     let messages = body?.messages;
-    if(body && !messages?.length){
-      messages = Object.entries(Object(body)).map(([key,value])=>({role:String(key),content:stringify(value)}));
+    if (body && !messages?.length) {
+      messages = Object.entries(Object(body)).map(([key, value]) => ({
+        role: String(key),
+        content: stringify(value)
+      }));
     }
-    if(!messages?.length){
-      messages = stringify(text).split('\n').map(x=>({role:"user",content:x}));
+    if (!messages?.length) {
+      messages = stringify(text).split('\n').map(x => ({
+        role: "user",
+        content: x
+      }));
     }
 
-    if(request.url.includes('test')){
-      messages = stringify(test).split('\n').map(x=>({role:"user",content:x}));
+    if (request.url.includes('test')) {
+      messages = stringify(test).split('\n').map(x => ({
+        role: "user",
+        content: x
+      }));
     }
 
     const stream = Boolean(body?.stream);
     const requestId = `chatcmpl-${crypto.randomUUID()}`;
     const created = Math.floor(Date.now() / 1000);
 
-    const aiInput = { messages };
+    const aiInput = {
+      messages
+    };
     for (const key of ["temperature", "top_p", "max_tokens", "stop"]) {
       if (body[key] !== undefined) aiInput[key] = body[key];
     }
@@ -345,11 +406,17 @@ export default {
         trackRequest(model);
 
         if (stream) {
-          const streamInput = { ...aiInput, stream: true };
-          const cfStream = await runAI(env.AI, model, streamInput,summarizer);
+          const streamInput = {
+            ...aiInput,
+            stream: true
+          };
+          const cfStream = await runAI(env.AI, model, streamInput, summarizer);
           return new Response(
-            cfStreamToOpenAIStream(cfStream, { id: requestId, model, created }),
-            {
+            cfStreamToOpenAIStream(cfStream, {
+              id: requestId,
+              model,
+              created
+            }), {
               headers: {
                 "content-type": "text/event-stream; charset=utf-8",
                 "cache-control": "no-cache, no-transform",
@@ -360,10 +427,16 @@ export default {
           );
         }
 
-        const result = await runAI(env.AI, model, aiInput,summarizer);
+        const result = await runAI(env.AI, model, aiInput, summarizer);
         const content = extractAssistantText(result);
-        return json(toOpenAIChatResponse({ id: requestId, model, content }), {
-          headers: { "cache-control": "no-store" },
+        return json(toOpenAIChatResponse({
+          id: requestId,
+          model,
+          content
+        }), {
+          headers: {
+            "cache-control": "no-store"
+          },
         });
       } catch (error) {
         lastError = error;
@@ -378,13 +451,12 @@ export default {
       }
     }
 
-    return json(
-      {
-        error: "Cloudflare AI request failed. " + String(lastError?.message),
-        detail: lastError instanceof Error ? lastError.message : String(lastError),
-        aiInput
-      },
-      { status: 502 },
-    );
+    return json({
+      error: "Cloudflare AI request failed. " + String(lastError?.message),
+      detail: lastError instanceof Error ? lastError.message : String(lastError),
+      aiInput
+    }, {
+      status: 502
+    }, );
   },
 };
