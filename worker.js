@@ -75,7 +75,7 @@ function removeJsonBlocks(str) {
     prev = result;
     result = result.replace(/\{[^{}]*\}/g, (match) => {
       try {
-       // JSON.parse(match);
+        JSON.parse(match);
         return '';
       } catch {
         return match;
@@ -174,7 +174,7 @@ function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
 
           if(canParse(token)){
             const parsed2 = JSON.parse(token);
-            if(parsed2.choices?.[0]?.delta?.content){
+            if(isString(parsed2.choices?.[0]?.delta?.content)){
               token = parsed2.choices?.[0]?.delta?.content;
               model = parsed2.model ?? model;
             }
@@ -323,6 +323,11 @@ const longestArray = (...args)=>{
 };
 
 async function runAI(AI, model, aiInput,summarizer,summarizerType){
+  aiInput.messages = aiInput.messages.map(msg=>{
+          msg.content = [...new Set(msg.content.split('\n'))].join('\n');
+          msg.content = [...new Set(msg.content.split('.'))].join('.');
+          return msg;
+  });
   if(aiInput.messages[0]?.role !== 'system'){
     aiInput.messages.unshift({role:'system',content:`Current DateTime: ${new Date().toISOString()}`});
   }
@@ -338,6 +343,8 @@ async function runAI(AI, model, aiInput,summarizer,summarizerType){
     const tokens = (+e.message.match(/tokens\s*\((\d+)\)/)[1]||0);
     const limit = Math.floor((+e.message.match(/limit\s*\((\d+)\)/)[1]||0) * 0.8);
     let text = aiInput.messages.map(x=>x.content).join('\n');
+    let messageArray = aiInput.messages;
+    let textified = false;
     try{
       if(!summarizer){
         throw summarizer;
@@ -348,10 +355,17 @@ async function runAI(AI, model, aiInput,summarizer,summarizerType){
           max_length: limit
         });
         text = summary;
+        textified = true;
       }else{
         text = [...new Set(text.split('\n'))].join('\n');
         text = [...new Set(text.split('.'))].join('.');
         text = [...new Set(text.split(' '))].join(' ');
+        messageArray = messageArray.map(msg=>{
+          msg.content = [...new Set(msg.content.split('\n'))].join('\n');
+          msg.content = [...new Set(msg.content.split('.'))].join('.');
+          msg.content = [...new Set(msg.content.split(' '))].join(' ');
+          return msg;
+        });
       }   
     }catch{
       const over = tokens - limit;
@@ -362,11 +376,21 @@ async function runAI(AI, model, aiInput,summarizer,summarizerType){
         text = text.slice(Math.round(text.length/2));
       }
     }
-
-    const messages = longestArray(text.split('\n'),[...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)].map(x=>x.segment.trim()).filter(Boolean));
-    const oldMessages = aiInput.messages.slice(aiInput.messages.length - messages.length);
-    aiInput.messages = messages.map((x,i)=>({role:oldMessages[i]?.role||'user',content:x}));
-    aiInput.messages.push({role:String(oldMessages[oldMessages.length - 1]?.role),content:String([...oldMessages].map(x=>x.content).join('\n').split('\n').pop())});
+    if(textified){
+      const messages = longestArray(text.split('\n'),[...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)].map(x=>x.segment.trim()).filter(Boolean));
+      const oldMessages = aiInput.messages.slice(aiInput.messages.length - messages.length);
+      aiInput.messages = messages.map((x,i)=>({role:oldMessages[i]?.role||'user',content:x}));
+      aiInput.messages.push({role:String(oldMessages[oldMessages.length - 1]?.role),content:String([...oldMessages].map(x=>x.content).join('\n').split('\n').pop())});
+    }else{
+      const over = tokens - limit;
+      const overPercent = over / tokens;
+      const cut = Math.floor(overPercent * messageArray.length);
+      messageArray = messageArray.slice(cut);
+      if(summarizer === 'thanos'){
+        messageArray = messageArray.slice(Math.round(messageArray.length/2));
+      }
+      aiInput.messages = messageArray;
+    }
     if(summarizer){
       return runAI(AI,model, aiInput);
     }else{
