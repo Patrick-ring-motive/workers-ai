@@ -250,6 +250,23 @@
         }
       };
 
+
+      function removeJsonBlocks(str) {
+        let result = str;
+        let prev;
+        do {
+          prev = result;
+          result = result.replace(/\{[^{}]*\}/g, (match) => {
+            try {
+              JSON.parse(match);
+              return '';
+            } catch {
+              return match;
+            }
+          });
+        } while (result !== prev);
+        return result.trim();
+      }
       function processSSELine(line, onToken) {
         const trimmed = line.trim();
         if (!trimmed.startsWith("data:")) return false;
@@ -264,7 +281,7 @@
             token = parsed2.choices?.[0]?.delta?.content;
           }
         }
-        if (typeof token === "string" && token) onToken(token);
+        if (typeof token === "string" && token) onToken(removeJsonBlocks(token));
         return false;
       }
 
