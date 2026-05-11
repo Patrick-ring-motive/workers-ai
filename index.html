@@ -241,6 +241,15 @@
         return div;
       }
 
+      const canParse = x =>{
+        try{
+          JSON.parse(x);
+          return true;
+        }catch{
+          return false;
+        }
+      };
+
       function processSSELine(line, onToken) {
         const trimmed = line.trim();
         if (!trimmed.startsWith("data:")) return false;
@@ -248,7 +257,13 @@
         if (data === "[DONE]") return true;
         let parsed;
         try { parsed = JSON.parse(data); } catch { return false; }
-        const token = parsed.choices?.[0]?.delta?.content;
+        let token = parsed.choices?.[0]?.delta?.content;
+        if(canParse(token)){
+          const parsed2 = JSON.parse(token);
+          if(parsed2.choices?.[0]?.delta?.content){
+            token = parsed2.choices?.[0]?.delta?.content;
+          }
+        }
         if (typeof token === "string" && token) onToken(token);
         return false;
       }
