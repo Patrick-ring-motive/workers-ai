@@ -258,7 +258,7 @@
           prev = result;
           result = result.replace(/\{[^{}]*\}/g, (match) => {
             try {
-              JSON.parse(match);
+             // JSON.parse(match);
               return '';
             } catch {
               return match;
