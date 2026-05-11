@@ -119,7 +119,7 @@ function extractAssistantText(result) {
    if(canParse(eh)){
       eh = extractAssistantText(parse(eh));
     }
-    return removeJsonBlocks(eh);
+    return (eh);
 }
 
 function toOpenAIChatResponse({ id, model, content }) {
@@ -169,8 +169,16 @@ function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
           let parsed;
           try { parsed = JSON.parse(data); } catch { }
 
-          const token = parsed?.response ?? parsed?.token ?? parsed?.text ?? data;
+          let token = parsed?.response ?? parsed?.token ?? parsed?.text ?? data;
           if (!token) continue;
+
+          if(canParse(token)){
+            const parsed2 = JSON.parse(token);
+            if(parsed2.choices?.[0]?.delta?.content){
+              token = parsed2.choices?.[0]?.delta?.content;
+              model = parsed2.model ?? model;
+            }
+          }
 
           const openaiChunk = {
             id, object: "chat.completion.chunk", created, model,
