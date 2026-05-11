@@ -265,15 +265,18 @@
             }
           });
         } while (result !== prev);
-        return result.trim();
+        return result;
       }
       function processSSELine(line, onToken) {
-        const trimmed = line.replace(/^\s+|\s+$/g,"");
+        const trimmed = line.replace(/^\s+/g,"");
         if (!trimmed.startsWith("data:")) return false;
         const data = trimmed.slice(5);
         if (data === "[DONE]") return true;
         let parsed;
         try { parsed = JSON.parse(data); } catch { return false; }
+        if(parsed.model){
+          document.getElementById("modelName").textContent = parsed.model;
+        }
         let token = parsed.choices?.[0]?.delta?.content;
         if(canParse(token)){
           const parsed2 = JSON.parse(token);
