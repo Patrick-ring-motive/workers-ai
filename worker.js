@@ -57,11 +57,36 @@ function json(data, init = {}) {
   });
 }
 
+      const canParse = x =>{
+        try{
+          JSON.parse(x);
+          return true;
+        }catch{
+          return false;
+        }
+      };
+
 const isArray = (val) => Array.isArray(val) || val instanceof Array;
 const isString = (val) => typeof val === "string" || val instanceof String;
-
+function removeJsonBlocks(str) {
+  let result = str;
+  let prev;
+  do {
+    prev = result;
+    result = result.replace(/\{[^{}]*\}/g, (match) => {
+      try {
+       // JSON.parse(match);
+        return '';
+      } catch {
+        return match;
+      }
+    });
+  } while (result !== prev);
+  return result.trim();
+}
 function extractAssistantText(result) {
-  if (!result) return "";
+  let eh = (()=>{
+    if (!result) return "";
   if (isString(result)) {
     try {
       const parsed = JSON.parse(result);
@@ -78,13 +103,23 @@ function extractAssistantText(result) {
   if (isString(result.result?.response)) return result.result.response;
   if (isString(result.result?.output_text)) return result.result.output_text;
 
-  const maybeChoice = result.choices?.[0]?.message?.content;
-  if (isString(maybeChoice)) return maybeChoice;
+  let maybeChoice = result.choices?.[0]?.message?.content;
+  if (isString(maybeChoice)){
+    if(canParse(maybeChoice)){
+      return extractAssistantText(parse(maybeChoice));
+    }
+    return maybeChoice;
+  }
 
   if (result.response && typeof result.response === 'object') return extractAssistantText(result.response);
   if (result.result && typeof result.result === 'object') return extractAssistantText(result.result);
 
-  return JSON.stringify(result);
+  return removeJsonBlocks(stringify(result));
+})();
+   if(canParse(eh)){
+      eh = extractAssistantText(parse(eh));
+    }
+    return removeJsonBlocks(eh);
 }
 
 function toOpenAIChatResponse({ id, model, content }) {
@@ -134,9 +169,7 @@ function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
           let parsed;
           try { parsed = JSON.parse(data); } catch { }
 
-          const token = parsed
-            ? (parsed.response ?? parsed.token ?? parsed.text ?? parsed.content ?? parsed.generated_text)
-            : data;
+          const token = parsed?.response ?? parsed?.token ?? parsed?.text ?? data;
           if (!token) continue;
 
           const openaiChunk = {
@@ -205,7 +238,7 @@ function cfStreamToOllamaStream(cfStream, { model, isChat }) {
           let parsed;
           try { parsed = JSON.parse(data); } catch { continue; }
 
-          const token = parsed.response ?? parsed.token ?? parsed.text ?? parsed.content ?? parsed.generated_text ?? "";
+          const token = parsed?.response ?? parsed?.token ?? parsed?.text ?? "";
           if (!token) continue;
 
           const ollamaChunk = isChat
