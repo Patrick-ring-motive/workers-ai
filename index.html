@@ -1,216 +1,209 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Worker Chat Tester</title>
-    <style>
-      :root {
-        color-scheme: light dark;
-        --bg: #0b1020;
-        --panel: #121a30;
-        --panel-2: #1a2544;
-        --text: #e9eeff;
-        --muted: #9ca7c8;
-        --accent: #5b8cff;
-        --ok: #3bb273;
-        --err: #ff6b6b;
-      }
 
-      * {
-        box-sizing: border-box;
-      }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Worker Chat Tester</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0b1020;
+      --panel: #121a30;
+      --panel-2: #1a2544;
+      --text: #e9eeff;
+      --muted: #9ca7c8;
+      --accent: #5b8cff;
+      --ok: #3bb273;
+      --err: #ff6b6b;
+    }
 
-      body {
-        margin: 0;
-        min-height: 100vh;
-        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Helvetica, Arial, sans-serif;
-        background: radial-gradient(1000px 400px at 20% -10%, #243366, var(--bg));
-        color: var(--text);
-        display: grid;
-        place-items: center;
-        padding: 20px;
-      }
+    * {
+      box-sizing: border-box;
+    }
 
-      .app {
-        width: min(920px, 100%);
-        background: color-mix(in srgb, var(--panel) 92%, black);
-        border: 1px solid #2d3f73;
-        border-radius: 14px;
-        overflow: hidden;
-        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
-      }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+      background: radial-gradient(1000px 400px at 20% -10%, #243366, var(--bg));
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
 
-      .top {
-        padding: 14px;
-        background: linear-gradient(180deg, #18264a, #111a34);
-        border-bottom: 1px solid #2d3f73;
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 10px;
-        align-items: center;
-      }
+    .app {
+      width: min(920px, 100%);
+      background: color-mix(in srgb, var(--panel) 92%, black);
+      border: 1px solid #2d3f73;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    }
 
-      .endpoint-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 10px;
-      }
+    .top {
+      padding: 14px;
+      background: linear-gradient(180deg, #18264a, #111a34);
+      border-bottom: 1px solid #2d3f73;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
 
-      input,
-      textarea,
-      button {
-        font: inherit;
-        color: inherit;
-      }
+    .endpoint-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
 
-      input,
-      textarea {
-        width: 100%;
-        border: 1px solid #30467f;
-        border-radius: 10px;
-        background: #0d1733;
-        color: var(--text);
-        padding: 10px 12px;
-      }
+    input,
+    textarea,
+    button {
+      font: inherit;
+      color: inherit;
+    }
 
-      input::placeholder,
-      textarea::placeholder {
-        color: var(--muted);
-      }
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid #30467f;
+      border-radius: 10px;
+      background: #0d1733;
+      color: var(--text);
+      padding: 10px 12px;
+    }
 
-      button {
-        border: 1px solid #3a5394;
-        border-radius: 10px;
-        background: #1d2f61;
-        color: #eef3ff;
-        padding: 10px 14px;
-        cursor: pointer;
-      }
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--muted);
+    }
 
-      button:hover {
-        background: #243a77;
-      }
+    button {
+      border: 1px solid #3a5394;
+      border-radius: 10px;
+      background: #1d2f61;
+      color: #eef3ff;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
 
-      button.primary {
-        background: var(--accent);
-        border-color: #8db0ff;
-        color: #fff;
-      }
+    button:hover {
+      background: #243a77;
+    }
 
-      button.primary:hover {
-        background: #4f82ff;
-      }
+    button.primary {
+      background: var(--accent);
+      border-color: #8db0ff;
+      color: #fff;
+    }
 
-      .chat {
-        height: 58vh;
-        overflow-y: auto;
-        padding: 16px;
-        background: linear-gradient(180deg, #0f1731, #0a1125);
-      }
+    button.primary:hover {
+      background: #4f82ff;
+    }
 
-      .msg {
-        max-width: 85%;
-        padding: 10px 12px;
-        border-radius: 12px;
-        margin-bottom: 10px;
-        line-height: 1.45;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-      }
+    .chat {
+      height: 58vh;
+      overflow-y: auto;
+      padding: 16px;
+      background: linear-gradient(180deg, #0f1731, #0a1125);
+    }
 
-      .msg.user {
-        margin-left: auto;
-        background: #29458f;
-      }
+    .msg {
+      max-width: 85%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
 
-      .msg.assistant {
-        margin-right: auto;
-        background: var(--panel-2);
-      }
+    .msg.user {
+      margin-left: auto;
+      background: #29458f;
+    }
 
-      .composer {
-        border-top: 1px solid #2d3f73;
-        padding: 12px;
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 10px;
-      }
+    .msg.assistant {
+      margin-right: auto;
+      background: var(--panel-2);
+    }
 
-      .status {
-        color: var(--muted);
-        font-size: 0.92rem;
-        padding: 0 12px 12px;
-      }
+    .composer {
+      border-top: 1px solid #2d3f73;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
 
-      .status.ok {
-        color: var(--ok);
-      }
+    .status {
+      color: var(--muted);
+      font-size: 0.92rem;
+      padding: 0 12px 12px;
+    }
 
-      .status.err {
-        color: var(--err);
-      }
+    .status.ok {
+      color: var(--ok);
+    }
 
-      .hint {
-        font-size: 0.85rem;
-        color: var(--muted);
-      }
+    .status.err {
+      color: var(--err);
+    }
 
-      .model-bar {
-        padding: 6px 14px 10px;
-        font-size: 0.8rem;
-        color: var(--muted);
-        background: linear-gradient(180deg, #111a34, #0f172b);
-        border-bottom: 1px solid #1e2e55;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
+    .hint {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
 
-      .model-bar span {
-        font-family: "SF Mono", "Fira Code", Consolas, monospace;
-        color: var(--accent);
-        font-size: 0.78rem;
-      }
-    </style>
-  </head>
-  <body>
-    <main class="app">
-      <section class="top">
-        <div class="endpoint-row">
-          <input
-            id="endpoint"
-            type="url"
-            title="Worker endpoint URL"
-            placeholder="https://your-worker.workers.dev"
-            value="https://workers-ai.language-models.workers.dev/"
-          />
-          <button id="saveEndpoint">Save</button>
-        </div>
-        <button id="clearChat">Clear Chat</button>
-      </section>
+    .model-bar {
+      padding: 6px 14px 10px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      background: linear-gradient(180deg, #111a34, #0f172b);
+      border-bottom: 1px solid #1e2e55;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-      <div class="model-bar">Active model: <span id="modelName">—</span></div>
+    .model-bar span {
+      font-family: "SF Mono", "Fira Code", Consolas, monospace;
+      color: var(--accent);
+      font-size: 0.78rem;
+    }
 
-      <section id="chat" class="chat"></section>
+  </style>
+</head>
 
-      <section class="composer">
-        <textarea
-          id="prompt"
-          rows="2"
-          placeholder="Type a message and press Enter (Shift+Enter for newline)..."
-        ></textarea>
-        <button id="send" class="primary">Send</button>
-      </section>
-
-      <div id="status" class="status hint">
-        Set endpoint, then send a message.
+<body>
+  <main class="app">
+    <section class="top">
+      <div class="endpoint-row">
+        <input id="endpoint" type="url" title="Worker endpoint URL" placeholder="https://your-worker.workers.dev" value="https://workers-ai.language-models.workers.dev/" />
+        <button id="saveEndpoint">Save</button>
       </div>
-    </main>
+      <button id="clearChat">Clear Chat</button>
+    </section>
 
-    <script>
-        (async()=>{
+    <div class="model-bar">Active model: <span id="modelName">—</span></div>
+
+    <section id="chat" class="chat"></section>
+
+    <section class="composer">
+      <textarea id="prompt" rows="2" placeholder="Type a message and press Enter (Shift+Enter for newline)..."></textarea>
+      <button id="send" class="primary">Send</button>
+    </section>
+
+    <div id="status" class="status hint">
+      Set endpoint, then send a message.
+    </div>
+  </main>
+
+  <script>
+    (async () => {
       const chatEl = document.getElementById("chat");
       const promptEl = document.getElementById("prompt");
       const sendBtn = document.getElementById("send");
@@ -241,15 +234,14 @@
         return div;
       }
 
-      const canParse = x =>{
-        try{
+      const canParse = x => {
+        try {
           JSON.parse(x);
           return true;
-        }catch{
+        } catch {
           return false;
         }
       };
-
 
       function removeJsonBlocks(str) {
         let result = str;
@@ -258,7 +250,7 @@
           prev = result;
           result = result.replace(/\{[^{}]*\}/g, (match) => {
             try {
-             // JSON.parse(match);
+              // JSON.parse(match);
               return '';
             } catch {
               return match;
@@ -267,20 +259,25 @@
         } while (result !== prev);
         return result;
       }
+
       function processSSELine(line, onToken) {
-        const trimmed = line.replace(/^\s+/g,"");
+        const trimmed = line.replace(/^\s+/g, "");
         if (!trimmed.startsWith("data:")) return false;
         const data = trimmed.slice(5);
         if (data === "[DONE]") return true;
         let parsed;
-        try { parsed = JSON.parse(data); } catch { return false; }
-        if(parsed.model){
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          return false;
+        }
+        if (parsed.model) {
           document.getElementById("modelName").textContent = parsed.model;
         }
         let token = parsed.choices?.[0]?.delta?.content;
-        if(canParse(token)){
+        if (canParse(token)) {
           const parsed2 = JSON.parse(token);
-          if(parsed2.choices?.[0]?.delta?.content){
+          if (parsed2.choices?.[0]?.delta?.content) {
             token = parsed2.choices?.[0]?.delta?.content;
           }
         }
@@ -293,14 +290,22 @@
         const decoder = new TextDecoder();
         let buf = "";
         while (true) {
-          const { done, value } = await reader.read();
+          const {
+            done,
+            value
+          } = await reader.read();
           if (done) break;
-          buf += decoder.decode(value, { stream: true });
+          buf += decoder.decode(value, {
+            stream: true
+          });
           const lines = buf.split("\n");
           buf = lines.pop();
           let finished = false;
           for (const line of lines) {
-            if (processSSELine(line, onToken)) { finished = true; break; }
+            if (processSSELine(line, onToken)) {
+              finished = true;
+              break;
+            }
           }
           if (finished) break;
         }
@@ -319,7 +324,10 @@
         const userText = promptEl.value.trim();
         if (!userText) return;
 
-        state.messages.push({ role: "user", content: userText });
+        state.messages.push({
+          role: "user",
+          content: userText
+        });
         addBubble("user", userText);
         promptEl.value = "";
 
@@ -333,7 +341,9 @@
         try {
           const res = await fetch(endpoint, {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: {
+              "content-type": "application/json"
+            },
             body: JSON.stringify({
               messages: state.messages,
               temperature: 0.7,
@@ -347,13 +357,16 @@
             throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
           }
 
-            await readStream(res.body, (token) => {
+          await readStream(res.body, (token) => {
             fullText += token;
             bubble.textContent = fullText;
             chatEl.scrollTop = chatEl.scrollHeight;
           });
 
-          state.messages.push({ role: "assistant", content: fullText });
+          state.messages.push({
+            role: "assistant",
+            content: fullText
+          });
           setStatus("Response received.", "ok");
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -377,7 +390,9 @@
         const endpoint = endpointEl.value.trim();
         if (!endpoint) return;
         try {
-          const res = await fetch(endpoint, { method: "GET" });
+          const res = await fetch(endpoint, {
+            method: "GET"
+          });
           if (!res.ok) return;
           const data = await res.json();
           const name = data?.model;
@@ -405,7 +420,9 @@
       });
 
       await fetchModelInfo();
-      })();
-    </script>
-  </body>
+    })();
+
+  </script>
+</body>
+
 </html>
