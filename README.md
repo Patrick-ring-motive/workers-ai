@@ -1,5 +1,6 @@
 # workers-ai
 
+see it in action:
 https://patrick-ring-motive.github.io/workers-ai/
 
 OpenAI-compatible chat completions proxy built on Cloudflare Workers AI. Auto-selects the best available free model, falls back gracefully on rate limits.
