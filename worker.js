@@ -1,5 +1,3 @@
-
-
 let test = `ok`;
 const DEFAULT_MODEL = "@cf/google/gemma-7b-it-lora";
 globalThis.env ??= {};
@@ -7,34 +5,35 @@ globalThis.env ??= {};
 let resolvedModel = null;
 let modelTiers = null;
 
-const stringify = x =>{
-  if(isString(x)){
+const stringify = x => {
+  if (isString(x)) {
     return String(x);
   }
-  try{
+  try {
     return String(JSON.stringify(x));
-  }catch{
+  } catch {
     return String(x);
   }
 };
 
-const parse = x =>{
-  try{
+const parse = x => {
+  try {
     return Object(JSON.parse(x));
-  }catch{
+  } catch {
     return Object(x);
   }
 };
 
-const fetchResponse = async(...args)=>{
-  try{
+const fetchResponse = async (...args) => {
+  try {
     return await fetch(...args);
-  }catch(e){
-    return new Response(String(e),{status:500,statusText:String(e)});
+  } catch (e) {
+    return new Response(String(e), {
+      status: 500,
+      statusText: String(e)
+    });
   }
 };
-
-
 
 // Tracks per-model rate limit windows: { modelName: { count, windowStart } }
 const rateLimitTracker = {};
@@ -57,17 +56,18 @@ function json(data, init = {}) {
   });
 }
 
-      const canParse = x =>{
-        try{
-          JSON.parse(x);
-          return true;
-        }catch{
-          return false;
-        }
-      };
+const canParse = x => {
+  try {
+    JSON.parse(x);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const isArray = (val) => Array.isArray(val) || val instanceof Array;
 const isString = (val) => typeof val === "string" || val instanceof String;
+
 function removeJsonBlocks(str) {
   let result = str;
   let prev;
@@ -84,64 +84,71 @@ function removeJsonBlocks(str) {
   } while (result !== prev);
   return result.trim();
 }
+
 function extractAssistantText(result) {
-  let eh = (()=>{
+  let eh = (() => {
     if (!result) return "";
-  if (isString(result)) {
-    try {
-      const parsed = JSON.parse(result);
-      if (parsed && typeof parsed === 'object') return extractAssistantText(parsed);
-    } catch {}
-    return result;
-  }
-
-  if (isString(result.response)) return result.response;
-  if (isString(result.output_text)) return result.output_text;
-  if (isString(result.text)) return result.text;
-  if (isString(result.content)) return result.content;
-  if (isString(result.generated_text)) return result.generated_text;
-  if (isString(result.result?.response)) return result.result.response;
-  if (isString(result.result?.output_text)) return result.result.output_text;
-
-  let maybeChoice = result.choices?.[0]?.message?.content;
-  if (isString(maybeChoice)){
-    if(canParse(maybeChoice)){
-      return extractAssistantText(parse(maybeChoice));
+    if (isString(result)) {
+      try {
+        const parsed = JSON.parse(result);
+        if (parsed && typeof parsed === 'object') return extractAssistantText(parsed);
+      } catch {}
+      return result;
     }
-    return maybeChoice;
-  }
 
-  if (result.response && typeof result.response === 'object') return extractAssistantText(result.response);
-  if (result.result && typeof result.result === 'object') return extractAssistantText(result.result);
+    if (isString(result.response)) return result.response;
+    if (isString(result.output_text)) return result.output_text;
+    if (isString(result.text)) return result.text;
+    if (isString(result.content)) return result.content;
+    if (isString(result.generated_text)) return result.generated_text;
+    if (isString(result.result?.response)) return result.result.response;
+    if (isString(result.result?.output_text)) return result.result.output_text;
 
-  return removeJsonBlocks(stringify(result));
-})();
-   if(canParse(eh)){
-      eh = extractAssistantText(parse(eh));
+    let maybeChoice = result.choices?.[0]?.message?.content;
+    if (isString(maybeChoice)) {
+      if (canParse(maybeChoice)) {
+        return extractAssistantText(parse(maybeChoice));
+      }
+      return maybeChoice;
     }
-    return (eh);
+
+    if (result.response && typeof result.response === 'object') return extractAssistantText(result.response);
+    if (result.result && typeof result.result === 'object') return extractAssistantText(result.result);
+
+    return removeJsonBlocks(stringify(result));
+  })();
+  if (canParse(eh)) {
+    eh = extractAssistantText(parse(eh));
+  }
+  return (eh);
 }
 
-function toOpenAIChatResponse({ id, model, content }) {
+function toOpenAIChatResponse({
+  id,
+  model,
+  content
+}) {
   return {
     id,
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
     model,
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: "assistant",
-          content,
-        },
-        finish_reason: "stop",
+    choices: [{
+      index: 0,
+      message: {
+        role: "assistant",
+        content,
       },
-    ],
+      finish_reason: "stop",
+    }, ],
   };
 }
 
-function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
+function cfStreamToOpenAIStream(cfStream, {
+  id,
+  model,
+  created
+}) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -149,40 +156,61 @@ function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
   return cfStream.pipeThrough(
     new TransformStream({
       transform(chunk, controller) {
-        buffer += decoder.decode(chunk, { stream: true });
+        buffer += decoder.decode(chunk, {
+          stream: true
+        });
         const lines = buffer.split("\n");
         buffer = lines.pop();
 
         for (const line of lines) {
           const trimmed = line.trim();
-          const data = trimmed.replace(/^data:/i,'').trim();
+          const data = trimmed.replace(/^data:/i, '').trim();
 
           if (data === "[DONE]") {
             const finishChunk = {
-              id, object: "chat.completion.chunk", created, model,
-              choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+              id,
+              object: "chat.completion.chunk",
+              created,
+              model,
+              choices: [{
+                index: 0,
+                delta: {},
+                finish_reason: "stop"
+              }],
             };
             controller.enqueue(encoder.encode(`data: ${stringify(finishChunk)}\n\ndata: [DONE]\n\n`));
             return;
           }
 
           let parsed;
-          try { parsed = JSON.parse(data); } catch { }
+          try {
+            parsed = JSON.parse(data);
+          } catch {}
 
           let token = parsed?.response ?? parsed?.token ?? parsed?.text ?? data;
           if (!token) continue;
 
-          if(canParse(token)){
+          if (canParse(token)) {
             const parsed2 = JSON.parse(token);
-            if(isString(parsed2.choices?.[0]?.delta?.content)){
+            if (isString(parsed2.choices?.[0]?.delta?.content)) {
               token = parsed2.choices?.[0]?.delta?.content;
               model = parsed2.model ?? model;
             }
           }
 
           const openaiChunk = {
-            id, object: "chat.completion.chunk", created, model,
-            choices: [{ index: 0, delta: { role:"assistant",content: token }, finish_reason: null }],
+            id,
+            object: "chat.completion.chunk",
+            created,
+            model,
+            choices: [{
+              index: 0,
+              delta: {
+                role: "assistant",
+                content: token
+              },
+              finish_reason: null
+            }],
           };
           controller.enqueue(encoder.encode(`data: ${stringify(openaiChunk)}\n\n`));
         }
@@ -193,11 +221,17 @@ function cfStreamToOpenAIStream(cfStream, { id, model, created }) {
 
 /* ── Ollama-format helpers ────────────────────────────────── */
 
-function toOllamaChatResponse({ model, content }) {
+function toOllamaChatResponse({
+  model,
+  content
+}) {
   return {
     model,
     created_at: new Date().toISOString(),
-    message: { role: "assistant", content },
+    message: {
+      role: "assistant",
+      content
+    },
     done: true,
     total_duration: 0,
     load_duration: 0,
@@ -206,7 +240,10 @@ function toOllamaChatResponse({ model, content }) {
   };
 }
 
-function toOllamaGenerateResponse({ model, content }) {
+function toOllamaGenerateResponse({
+  model,
+  content
+}) {
   return {
     model,
     created_at: new Date().toISOString(),
@@ -219,7 +256,10 @@ function toOllamaGenerateResponse({ model, content }) {
   };
 }
 
-function cfStreamToOllamaStream(cfStream, { model, isChat }) {
+function cfStreamToOllamaStream(cfStream, {
+  model,
+  isChat
+}) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -227,7 +267,9 @@ function cfStreamToOllamaStream(cfStream, { model, isChat }) {
   return cfStream.pipeThrough(
     new TransformStream({
       transform(chunk, controller) {
-        buffer += decoder.decode(chunk, { stream: true });
+        buffer += decoder.decode(chunk, {
+          stream: true
+        });
         const lines = buffer.split("\n");
         buffer = lines.pop();
 
@@ -236,22 +278,56 @@ function cfStreamToOllamaStream(cfStream, { model, isChat }) {
           const data = trimmed.replace(/^data:/i, '').trim();
 
           if (data === "[DONE]") {
-            const done = isChat
-              ? { model, created_at: new Date().toISOString(), message: { role: "assistant", content: "" }, done: true, total_duration: 0, eval_count: 0 }
-              : { model, created_at: new Date().toISOString(), response: "", done: true, total_duration: 0, eval_count: 0 };
+            const done = isChat ?
+              {
+                model,
+                created_at: new Date().toISOString(),
+                message: {
+                  role: "assistant",
+                  content: ""
+                },
+                done: true,
+                total_duration: 0,
+                eval_count: 0
+              } :
+              {
+                model,
+                created_at: new Date().toISOString(),
+                response: "",
+                done: true,
+                total_duration: 0,
+                eval_count: 0
+              };
             controller.enqueue(encoder.encode(stringify(done) + "\n"));
             return;
           }
 
           let parsed;
-          try { parsed = JSON.parse(data); } catch { continue; }
+          try {
+            parsed = JSON.parse(data);
+          } catch {
+            continue;
+          }
 
           const token = parsed?.response ?? parsed?.token ?? parsed?.text ?? "";
           if (!token) continue;
 
-          const ollamaChunk = isChat
-            ? { model, created_at: new Date().toISOString(), message: { role: "assistant", content: token }, done: false }
-            : { model, created_at: new Date().toISOString(), response: token, done: false };
+          const ollamaChunk = isChat ?
+            {
+              model,
+              created_at: new Date().toISOString(),
+              message: {
+                role: "assistant",
+                content: token
+              },
+              done: false
+            } :
+            {
+              model,
+              created_at: new Date().toISOString(),
+              response: token,
+              done: false
+            };
           controller.enqueue(encoder.encode(stringify(ollamaChunk) + "\n"));
         }
       },
@@ -270,7 +346,10 @@ function trackRequest(modelName) {
   const now = Date.now();
   const entry = rateLimitTracker[modelName];
   if (!entry || now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitTracker[modelName] = { count: 1, windowStart: now };
+    rateLimitTracker[modelName] = {
+      count: 1,
+      windowStart: now
+    };
   } else {
     entry.count++;
   }
@@ -280,7 +359,10 @@ function markRateLimited(modelName) {
   const now = Date.now();
   const entry = rateLimitTracker[modelName];
   if (!entry || now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitTracker[modelName] = { count: Infinity, windowStart: now };
+    rateLimitTracker[modelName] = {
+      count: Infinity,
+      windowStart: now
+    };
   } else {
     entry.count = Infinity;
   }
@@ -299,33 +381,32 @@ function pickAvailableModel(tiers) {
   return best?.name ?? null;
 }
 
-async function getModelTiers(){
-  try{
+async function getModelTiers() {
+  try {
     const res = await fetchResponse('https://text-generation-models.language-models-aggregate.workers.dev/');
     const text = await res.text();
     const obj = parse(text);
     obj.summarizer = res.headers.get('summarizer');
     obj.summarizerType = res.headers.get('summarizer-type');
     return obj;
-  }catch{
+  } catch {
     return [];
   }
 }
 
-const longestArray = (...args)=>{
+const longestArray = (...args) => {
   let longest = [];
-  for(const arg of args){
-    if(arg.length > longest.length){
+  for (const arg of args) {
+    if (arg.length > longest.length) {
       longest = arg;
     }
   }
   return longest;
 };
 
-
 function normalizeAiError(err) {
   const errorStr = err.toString();
-  
+
   // Default structure
   const normalized = {
     error: "Token limit exceeded",
@@ -339,7 +420,7 @@ function normalizeAiError(err) {
     try {
       const innerError = JSON.parse(jsonMatch[0]);
       const msg = innerError.error || "";
-      
+
       // Regex to capture "<= 1024" and "Given: 2048"
       const tokens = msg.match(/<= (\d+)\. Given: (\d+)/);
       if (tokens) {
@@ -366,9 +447,9 @@ function normalizeAiError(err) {
   return normalized;
 }
 
-async function runAI(AI,model,aiInput){
+async function runAI(AI, model, aiInput) {
   let result = await AI.run(model, aiInput);
-  if(result instanceof ReadableStream){
+  if (result instanceof ReadableStream) {
     const tee = result.tee();
     result = tee[0];
     result.head = await streamHead(tee[1]);
@@ -376,103 +457,116 @@ async function runAI(AI,model,aiInput){
   return result;
 }
 
-async function streamHead(stream){
-  try{
-    return JSON.parse(new TextDecoder().decode((await stream.getReader().read()).value).trim().replace(/^data:/,'').trim());
-  }catch(e){
+async function streamHead(stream) {
+  try {
+    return JSON.parse(new TextDecoder().decode((await stream.getReader().read()).value).trim().replace(/^data:/, '').trim());
+  } catch (e) {
     console.error(e);
   }
 }
 
-async function manageAI(AI, model, aiInput,summarizer,summarizerType){
+async function manageAI(AI, model, aiInput, summarizer, summarizerType) {
   let aiError;
-  aiInput.messages = aiInput.messages.map(msg=>{
-          msg.content = [...new Set(msg.content.split('\n'))].join('\n');
-          msg.content = [...new Set(msg.content.split('.'))].join('.');
-          return msg;
+  aiInput.messages = aiInput.messages.map(msg => {
+    msg.content = [...new Set(msg.content.split('\n'))].join('\n');
+    msg.content = [...new Set(msg.content.split('.'))].join('.');
+    return msg;
   });
-  aiInput.messages.unshift({role:'system',content:`Current DateTime: ${new Date().toISOString()}`});
-  try{
-    const result = await runAI(AI,model, aiInput);
-    if(aiInput.stream){
+  aiInput.messages.unshift({
+    role: 'system',
+    content: `Current DateTime: ${new Date().toISOString()}`
+  });
+  try {
+    const result = await runAI(AI, model, aiInput);
+    if (aiInput.stream) {
       const head = result.head;
-      if(head?.usage && !head.usage.total_tokens){
+      if (head?.usage && !head.usage.total_tokens) {
         throw new Error(`The estimated number of input and maximum output tokens (${aiInput.max_tokens||2}) exceeded this model context window limit (${(aiInput.max_tokens / 2)||1})`);
       }
     }
     return result;
-  }catch(e){
+  } catch (e) {
     aiError = normalizeAiError(e);
-    if(aiError.error !== "Token limit exceeded"){
+    if (aiError.error !== "Token limit exceeded") {
       console.error(e);
       throw e;
     }
-    if(aiInput.max_tokens){
+    if (aiInput.max_tokens) {
       aiInput.max_completion_tokens = aiInput.max_tokens || aiInput.maxTokens;
       delete aiInput.max_tokens;
       delete aiInput.maxTokens;
-      try{
-        return await runAI(AI,model, aiInput);
-      }catch{}
+      try {
+        return await runAI(AI, model, aiInput);
+      } catch {}
     }
-    try{
-      return await runAI(AI,'@cf/ibm-granite/granite-4.0-h-micro',aiInput);
-    }catch{}
+    try {
+      return await runAI(AI, '@cf/ibm-granite/granite-4.0-h-micro', aiInput);
+    } catch {}
     const tokens = aiError?.given_tokens;
     const limit = Math.floor(aiError?.max_tokens * 0.8);
-    let text = aiInput.messages.map(x=>x.content).join('\n');
+    let text = aiInput.messages.map(x => x.content).join('\n');
     let messageArray = aiInput.messages;
     let textified = false;
-    try{
-      if(!summarizer){
+    try {
+      if (!summarizer) {
         throw summarizer;
       }
-      if(summarizerType === 'Summarization'){
-        const {summary} = await runAI(AI,summarizer, {
+      if (summarizerType === 'Summarization') {
+        const {
+          summary
+        } = await runAI(AI, summarizer, {
           input_text: text,
           max_length: limit
         });
         text = summary;
         textified = true;
-      }else{
+      } else {
         text = [...new Set(text.split('\n'))].join('\n');
         text = [...new Set(text.split('.'))].join('.');
         text = [...new Set(text.split(' '))].join(' ');
-        messageArray = messageArray.map(msg=>{
+        messageArray = messageArray.map(msg => {
           msg.content = [...new Set(msg.content.split('\n'))].join('\n');
           msg.content = [...new Set(msg.content.split('.'))].join('.');
           msg.content = [...new Set(msg.content.split(' '))].join(' ');
           return msg;
         });
-      }   
-    }catch{
+      }
+    } catch {
       const over = tokens - limit;
       const overPercent = over / tokens;
       const cut = Math.floor(overPercent * text.length);
       text = text.slice(cut);
-      if(summarizer === 'thanos'){
-        text = text.slice(Math.round(text.length/2));
+      if (summarizer === 'thanos') {
+        text = text.slice(Math.round(text.length / 2));
       }
     }
-    if(textified){
-      const messages = longestArray(text.split('\n'),[...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)].map(x=>x.segment.trim()).filter(Boolean));
+    if (textified) {
+      const messages = longestArray(text.split('\n'), [...new Intl.Segmenter("en", {
+        granularity: "sentence"
+      }).segment(text)].map(x => x.segment.trim()).filter(Boolean));
       const oldMessages = aiInput.messages.slice(aiInput.messages.length - messages.length);
-      aiInput.messages = messages.map((x,i)=>({role:oldMessages[i]?.role||'user',content:x}));
-      aiInput.messages.push({role:String(oldMessages[oldMessages.length - 1]?.role),content:String([...oldMessages].map(x=>x.content).join('\n').split('\n').pop())});
-    }else{
+      aiInput.messages = messages.map((x, i) => ({
+        role: oldMessages[i]?.role || 'user',
+        content: x
+      }));
+      aiInput.messages.push({
+        role: String(oldMessages[oldMessages.length - 1]?.role),
+        content: String([...oldMessages].map(x => x.content).join('\n').split('\n').pop())
+      });
+    } else {
       const over = tokens - limit;
       const overPercent = over / tokens;
       const cut = Math.floor(overPercent * messageArray.length);
       messageArray = messageArray.slice(cut);
-      if(summarizer === 'thanos'){
-        messageArray = messageArray.slice(Math.round(messageArray.length/2));
+      if (summarizer === 'thanos') {
+        messageArray = messageArray.slice(Math.round(messageArray.length / 2));
       }
       aiInput.messages = messageArray;
     }
-    if(summarizer){
-      return manageAI(AI,model, aiInput);
-    }else{
-      return manageAI(AI,model,aiInput,'thanos');
+    if (summarizer) {
+      return manageAI(AI, model, aiInput);
+    } else {
+      return manageAI(AI, model, aiInput, 'thanos');
     }
   }
 }
@@ -481,17 +575,19 @@ export default {
   async fetch(request, env) {
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: CORS_HEADERS });
+      return new Response(null, {
+        headers: CORS_HEADERS
+      });
     }
 
     // Lazy-init
 
     modelTiers ??= getModelTiers();
-    if(modelTiers instanceof Promise){
+    if (modelTiers instanceof Promise) {
       modelTiers = await modelTiers;
     }
-    const summarizer= modelTiers?.summarizer;
-    const summarizerType= modelTiers?.summarizerType;
+    const summarizer = modelTiers?.summarizer;
+    const summarizerType = modelTiers?.summarizerType;
 
     // Resolve current best available model from tiers
     resolvedModel = (modelTiers && pickAvailableModel(modelTiers)) || DEFAULT_MODEL;
@@ -504,11 +600,18 @@ export default {
 
     // Ollama health check: GET / must return plain text "Ollama is running"
     if (request.method === 'GET' && path === '/') {
-      return new Response('Ollama is running', { headers: { 'content-type': 'text/plain; charset=utf-8', ...CORS_HEADERS } });
+      return new Response('Ollama is running', {
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          ...CORS_HEADERS
+        }
+      });
     }
 
     if (path === '/api/version') {
-      return json({ version: "0.6.2" });
+      return json({
+        version: "0.6.2"
+      });
     }
 
     if (path === '/api/tags' && request.method === 'GET') {
@@ -522,29 +625,55 @@ export default {
               modified_at: new Date().toISOString(),
               size: 0,
               digest: "",
-              details: { format: "gguf", family: "", parameter_size: "", quantization_level: "" },
+              details: {
+                format: "gguf",
+                family: "",
+                parameter_size: "",
+                quantization_level: ""
+              },
             });
           }
         }
       }
       if (models.length === 0) {
-        models.push({ name: currentModel, model: currentModel, modified_at: new Date().toISOString(), size: 0, digest: "", details: {} });
+        models.push({
+          name: currentModel,
+          model: currentModel,
+          modified_at: new Date().toISOString(),
+          size: 0,
+          digest: "",
+          details: {}
+        });
       }
-      return json({ models });
+      return json({
+        models
+      });
     }
 
     if (path === '/api/show' && request.method === 'POST') {
-      let showBody; try { showBody = await request.clone().json(); } catch { showBody = {}; }
+      let showBody;
+      try {
+        showBody = await request.clone().json();
+      } catch {
+        showBody = {};
+      }
       return json({
         modelfile: `FROM ${showBody?.name || currentModel}`,
         parameters: "",
         template: "",
-        details: { format: "gguf", family: "", parameter_size: "", quantization_level: "" },
+        details: {
+          format: "gguf",
+          family: "",
+          parameter_size: "",
+          quantization_level: ""
+        },
       });
     }
 
     if (path === '/api/pull' && request.method === 'POST') {
-      return json({ status: "success" });
+      return json({
+        status: "success"
+      });
     }
 
     const isOllamaChat = path === '/api/chat' && request.method === 'POST';
@@ -574,9 +703,12 @@ export default {
       text = (await request.text()).trim();
       body = JSON.parse(text);
     } catch {
-      if(!text){
+      if (!text) {
         body = Object.fromEntries(new URL(request.url).searchParams.entries());
-        body = {...Object.fromEntries(request.headers.entries()),...body};
+        body = {
+          ...Object.fromEntries(request.headers.entries()),
+          ...body
+        };
       }
     }
 
@@ -586,19 +718,34 @@ export default {
     if (isOllamaGenerate && !messages?.length) {
       const prompt = body?.prompt || "";
       messages = [];
-      if (body?.system) messages.push({ role: "system", content: body.system });
-      messages.push({ role: "user", content: prompt });
+      if (body?.system) messages.push({
+        role: "system",
+        content: body.system
+      });
+      messages.push({
+        role: "user",
+        content: prompt
+      });
     }
 
-    if(body && !messages?.length){
-      messages = Object.entries(Object(body)).map(([key,value])=>({role:String(key),content:stringify(value)}));
+    if (body && !messages?.length) {
+      messages = Object.entries(Object(body)).map(([key, value]) => ({
+        role: String(key),
+        content: stringify(value)
+      }));
     }
-    if(!messages?.length){
-      messages = stringify(text).split('\n').map(x=>({role:"user",content:x}));
+    if (!messages?.length) {
+      messages = stringify(text).split('\n').map(x => ({
+        role: "user",
+        content: x
+      }));
     }
 
-    if(request.url.includes('test')){
-      messages = stringify(test).split('\n').map(x=>({role:"user",content:x}));
+    if (request.url.includes('test')) {
+      messages = stringify(test).split('\n').map(x => ({
+        role: "user",
+        content: x
+      }));
     }
 
     // Ollama defaults stream to true; OpenAI defaults to false
@@ -606,7 +753,9 @@ export default {
     const requestId = `chatcmpl-${crypto.randomUUID()}`;
     const created = Math.floor(Date.now() / 1000);
 
-    const aiInput = { messages };
+    const aiInput = {
+      messages
+    };
     // Ollama puts params in "options", OpenAI puts them top-level
     const paramSource = isOllama ? (body?.options || {}) : body;
     for (const key of ["temperature", "top_p", "max_tokens", "stop"]) {
@@ -651,12 +800,17 @@ export default {
         trackRequest(model);
 
         if (stream) {
-          const streamInput = { ...aiInput, stream: true };
-          const cfStream = await manageAI(env.AI, model, streamInput,summarizer,summarizerType);
+          const streamInput = {
+            ...aiInput,
+            stream: true
+          };
+          const cfStream = await manageAI(env.AI, model, streamInput, summarizer, summarizerType);
           if (isOllama) {
             return new Response(
-              cfStreamToOllamaStream(cfStream, { model, isChat: isOllamaChat }),
-              {
+              cfStreamToOllamaStream(cfStream, {
+                model,
+                isChat: isOllamaChat
+              }), {
                 headers: {
                   "content-type": "application/x-ndjson",
                   "cache-control": "no-cache, no-transform",
@@ -667,8 +821,11 @@ export default {
           }
 
           return new Response(
-            cfStreamToOpenAIStream(cfStream, { id: requestId, model, created }),
-            {
+            cfStreamToOpenAIStream(cfStream, {
+              id: requestId,
+              model,
+              created
+            }), {
               headers: {
                 "content-type": "text/event-stream; charset=utf-8",
                 "cache-control": "no-cache, no-transform",
@@ -679,18 +836,38 @@ export default {
           );
         }
 
-        const result = await manageAI(env.AI, model, aiInput,summarizer,summarizerType);
+        const result = await manageAI(env.AI, model, aiInput, summarizer, summarizerType);
         const content = extractAssistantText(result);
 
         if (isOllamaChat) {
-          return json(toOllamaChatResponse({ model, content }), { headers: { "cache-control": "no-store" } });
+          return json(toOllamaChatResponse({
+            model,
+            content
+          }), {
+            headers: {
+              "cache-control": "no-store"
+            }
+          });
         }
         if (isOllamaGenerate) {
-          return json(toOllamaGenerateResponse({ model, content }), { headers: { "cache-control": "no-store" } });
+          return json(toOllamaGenerateResponse({
+            model,
+            content
+          }), {
+            headers: {
+              "cache-control": "no-store"
+            }
+          });
         }
 
-        return json(toOpenAIChatResponse({ id: requestId, model, content }), {
-          headers: { "cache-control": "no-store" },
+        return json(toOpenAIChatResponse({
+          id: requestId,
+          model,
+          content
+        }), {
+          headers: {
+            "cache-control": "no-store"
+          },
         });
       } catch (error) {
         lastError = error;
@@ -704,10 +881,18 @@ export default {
       }
     }
 
-    const errPayload = isOllama
-      ? { error: "request failed: " + String(lastError?.message) }
-      : { error: "Cloudflare AI request failed. " + String(lastError?.message), detail: lastError instanceof Error ? lastError.message : String(lastError), aiInput };
+    const errPayload = isOllama ?
+      {
+        error: "request failed: " + String(lastError?.message)
+      } :
+      {
+        error: "Cloudflare AI request failed. " + String(lastError?.message),
+        detail: lastError instanceof Error ? lastError.message : String(lastError),
+        aiInput
+      };
 
-    return json(errPayload, { status: 502 });
+    return json(errPayload, {
+      status: 502
+    });
   },
 };
