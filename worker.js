@@ -278,26 +278,24 @@ function cfStreamToOllamaStream(cfStream, {
           const data = trimmed.replace(/^data:/i, '').trim();
 
           if (data === "[DONE]") {
-            const done = isChat ?
-              {
-                model,
-                created_at: new Date().toISOString(),
-                message: {
-                  role: "assistant",
-                  content: ""
-                },
-                done: true,
-                total_duration: 0,
-                eval_count: 0
-              } :
-              {
-                model,
-                created_at: new Date().toISOString(),
-                response: "",
-                done: true,
-                total_duration: 0,
-                eval_count: 0
-              };
+            const done = isChat ? {
+              model,
+              created_at: new Date().toISOString(),
+              message: {
+                role: "assistant",
+                content: ""
+              },
+              done: true,
+              total_duration: 0,
+              eval_count: 0
+            } : {
+              model,
+              created_at: new Date().toISOString(),
+              response: "",
+              done: true,
+              total_duration: 0,
+              eval_count: 0
+            };
             controller.enqueue(encoder.encode(stringify(done) + "\n"));
             return;
           }
@@ -312,22 +310,20 @@ function cfStreamToOllamaStream(cfStream, {
           const token = parsed?.response ?? parsed?.token ?? parsed?.text ?? "";
           if (!token) continue;
 
-          const ollamaChunk = isChat ?
-            {
-              model,
-              created_at: new Date().toISOString(),
-              message: {
-                role: "assistant",
-                content: token
-              },
-              done: false
-            } :
-            {
-              model,
-              created_at: new Date().toISOString(),
-              response: token,
-              done: false
-            };
+          const ollamaChunk = isChat ? {
+            model,
+            created_at: new Date().toISOString(),
+            message: {
+              role: "assistant",
+              content: token
+            },
+            done: false
+          } : {
+            model,
+            created_at: new Date().toISOString(),
+            response: token,
+            done: false
+          };
           controller.enqueue(encoder.encode(stringify(ollamaChunk) + "\n"));
         }
       },
@@ -881,15 +877,13 @@ export default {
       }
     }
 
-    const errPayload = isOllama ?
-      {
-        error: "request failed: " + String(lastError?.message)
-      } :
-      {
-        error: "Cloudflare AI request failed. " + String(lastError?.message),
-        detail: lastError instanceof Error ? lastError.message : String(lastError),
-        aiInput
-      };
+    const errPayload = isOllama ? {
+      error: "request failed: " + String(lastError?.message)
+    } : {
+      error: "Cloudflare AI request failed. " + String(lastError?.message),
+      detail: lastError instanceof Error ? lastError.message : String(lastError),
+      aiInput
+    };
 
     return json(errPayload, {
       status: 502
