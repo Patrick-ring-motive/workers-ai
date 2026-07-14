@@ -350,7 +350,7 @@
         try {
           let res; 
           const retries = 4;
-          let msgs = stats.messages;
+          let msgs = state.messages;
           for(const _ of Array(retries)){
             if(res?.ok)break;
             res = await fetchResponse(endpoint, {
