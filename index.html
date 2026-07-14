@@ -350,6 +350,7 @@
         try {
           let res; 
           const retries = 4;
+          let msgs = stats.messages;
           for(const _ of Array(retries)){
             if(res?.ok)break;
             res = await fetchResponse(endpoint, {
@@ -358,11 +359,12 @@
                 "content-type": "application/json"
               },
               body: JSON.stringify({
-                messages: state.messages,
+                messages: msgs,
                 temperature: 0.7,
                 stream: true,
               }),
             });
+            msgs = compactMessages(msgs);
           }
 
           if (!res.ok) {
