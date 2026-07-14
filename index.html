@@ -350,7 +350,7 @@
         try {
           let res; 
           const retries = 4;
-          for(const _ of Array(retries){
+          for(const _ of Array(retries)){
             if(res?.ok)break;
             res = await fetchResponse(endpoint, {
               method: "POST",
