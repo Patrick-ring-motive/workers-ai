@@ -204,7 +204,10 @@
 
   <script>
     (async () => {
-      const  { edgeCompact,compactMessages } = await import('https://patrick-ring-motive.github.io/edge-compact/compact.js?'+new Date().getTime());
+      const {
+        edgeCompact,
+        compactMessages
+      } = await import('https://patrick-ring-motive.github.io/edge-compact/compact.js?' + new Date().getTime());
       const chatEl = document.getElementById("chat");
       const promptEl = document.getElementById("prompt");
       const sendBtn = document.getElementById("send");
@@ -339,20 +342,23 @@
         const bubble = addBubble("assistant");
         let fullText = "";
 
-        const fetchResponse = async (...args)=>{
-            try{
-              return await fetch(...args);
-            }catch(e){
-              return new Response(String(e),{status:500,statusText:String(e)});
-            }
+        const fetchResponse = async (...args) => {
+          try {
+            return await fetch(...args);
+          } catch (e) {
+            return new Response(String(e), {
+              status: 500,
+              statusText: String(e)
+            });
+          }
         };
 
         try {
-          let res; 
+          let res;
           const retries = 4;
           let msgs = state.messages;
-          for(const _ of Array(retries)){
-            if(res?.ok)break;
+          for (const _ of Array(retries)) {
+            if (res?.ok) break;
             res = await fetchResponse(endpoint, {
               method: "POST",
               headers: {
