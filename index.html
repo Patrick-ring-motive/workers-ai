@@ -167,12 +167,40 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
     }
 
     .model-bar span {
       font-family: "SF Mono", "Fira Code", Consolas, monospace;
       color: var(--accent);
       font-size: 0.78rem;
+    }
+
+    .temp-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .temp-control label {
+      color: var(--muted);
+    }
+
+    .temp-control input[type="range"] {
+      width: 140px;
+      padding: 0;
+      accent-color: var(--accent);
+      background: transparent;
+      border: none;
+    }
+
+    .temp-control span {
+      font-family: "SF Mono", "Fira Code", Consolas, monospace;
+      color: var(--accent);
+      font-size: 0.78rem;
+      min-width: 2.4em;
+      text-align: right;
     }
 
   </style>
@@ -188,7 +216,14 @@
       <button id="clearChat">Clear Chat</button>
     </section>
 
-    <div class="model-bar">Active model: <span id="modelName">—</span></div>
+    <div class="model-bar">
+      Active model: <span id="modelName">—</span>
+      <div class="temp-control">
+        <label for="temperature">Temp</label>
+        <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" />
+        <span id="temperatureValue">0.7</span>
+      </div>
+    </div>
 
     <section id="chat" class="chat"></section>
 
@@ -215,14 +250,19 @@
       const endpointEl = document.getElementById("endpoint");
       const saveEndpointBtn = document.getElementById("saveEndpoint");
       const clearChatBtn = document.getElementById("clearChat");
+      const temperatureEl = document.getElementById("temperature");
+      const temperatureValueEl = document.getElementById("temperatureValue");
 
       const state = {
         endpoint: localStorage.getItem("workerEndpoint") || endpointEl.value,
+        temperature: parseFloat(localStorage.getItem("temperature")) || 0.7,
         messages: [],
         inFlight: false,
       };
 
       endpointEl.value = state.endpoint;
+      temperatureEl.value = state.temperature;
+      temperatureValueEl.textContent = state.temperature.toFixed(1);
 
       function setStatus(text, kind = "") {
         statusEl.textContent = text;
@@ -366,7 +406,7 @@
               },
               body: JSON.stringify({
                 messages: msgs,
-                temperature: 0.7,
+                temperature: state.temperature,
                 stream: true,
               }),
             });
@@ -406,6 +446,12 @@
         localStorage.setItem("workerEndpoint", state.endpoint);
         setStatus("Endpoint saved locally.", "ok");
         fetchModelInfo();
+      });
+
+      temperatureEl.addEventListener("input", () => {
+        state.temperature = parseFloat(temperatureEl.value);
+        temperatureValueEl.textContent = state.temperature.toFixed(1);
+        localStorage.setItem("temperature", state.temperature);
       });
 
       async function fetchModelInfo() {
